@@ -3,14 +3,14 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
 const data = [
   [
-    [0.0, 0.1, 0.2, 0.3],
+    [0.0, 0.1, null, 0.3],
     [0.1, 0.2, 0.3, 0.4],
-    [0.2, 0.3, 0.4, 0.5],
+    [null, 0.3, 0.4, 0.5],
   ],
   [
-    [0.5, 0.6, 0.7, 0.8],
-    [0.6, 0.7, 0.8, 0.9],
-    [0.7, 0.8, 0.9, 1.0],
+    [0.5, null, 0.7, 0.8],
+    [0.6, 0.7, null, 0.9],
+    [0.7, 0.8, 0.9, null],
  ]
 ];
 
@@ -76,8 +76,23 @@ function createStructureFromData(scene, data, environmentMap) {
     const sizeY = data[0].length;
     const sizeX = data[0][0].length;
 
-    const cubeGeometry = new THREE.BoxGeometry(1, 1, 1);
+    let instanceCount = 0;
+    for (let z = 0; z < sizeZ; z++) {
+        for (let y = 0; y < sizeY; y++) {
+            for (let x = 0; x < sizeX; x++) {
+                if (data[z][y][x] !== null) {
+                    instanceCount++;
+                }
+            }
+        }
+    }
 
+    if (instanceCount === 0) {
+        console.log("Data contains no non-null values. Nothing to render.");
+        return null;
+    }
+
+    const cubeGeometry = new THREE.BoxGeometry(1, 1, 1);
     const glassTintMaterial = new THREE.MeshStandardMaterial({
         envMap: environmentMap,
         roughness: 0.1,
@@ -87,50 +102,43 @@ function createStructureFromData(scene, data, environmentMap) {
         side: THREE.DoubleSide,
     });
 
-    const instanceCount = sizeX * sizeY * sizeZ;
-
-    if (instanceCount === 0) {
-        console.log("Data dimensions are zero. Nothing to render.");
-        return null;
-    }
-
     const instancedMesh = new THREE.InstancedMesh(cubeGeometry, glassTintMaterial, instanceCount);
 
     const colorGreen = new THREE.Color(0x00ff00);
     const colorAmber = new THREE.Color(0xffbf00);
     const colorRed = new THREE.Color(0xff0000);
     const instanceColor = new THREE.Color();
-
     const matrix = new THREE.Matrix4();
-    let instanceIndex = 0;
     const spacing = 1.0;
-
     const offsetX = -(sizeX - 1) * spacing / 2;
     const offsetY = -(sizeY - 1) * spacing / 2;
     const offsetZ = -(sizeZ - 1) * spacing / 2;
 
+    let instanceIndex = 0;
     for (let z = 0; z < sizeZ; z++) {
         for (let y = 0; y < sizeY; y++) {
             for (let x = 0; x < sizeX; x++) {
                 const value = data[z][y][x];
 
-                if (value < 0.5) {
-                  const t = Math.max(0, Math.min(1, value / 0.5));
-                  instanceColor.lerpColors(colorGreen, colorAmber, t);
-                } else {
-                  const t = Math.max(0, Math.min(1, (value - 0.5) / 0.5));
-                  instanceColor.lerpColors(colorAmber, colorRed, t);
+                if (value !== null) {
+                    if (value < 0.5) {
+                      const t = Math.max(0, Math.min(1, value / 0.5));
+                      instanceColor.lerpColors(colorGreen, colorAmber, t);
+                    } else {
+                      const t = Math.max(0, Math.min(1, (value - 0.5) / 0.5));
+                      instanceColor.lerpColors(colorAmber, colorRed, t);
+                    }
+
+                    const posX = offsetX + x * spacing;
+                    const posY = offsetY + y * spacing;
+                    const posZ = offsetZ + z * spacing;
+                    matrix.setPosition(posX, posY, posZ);
+
+                    instancedMesh.setMatrixAt(instanceIndex, matrix);
+                    instancedMesh.setColorAt(instanceIndex, instanceColor);
+
+                    instanceIndex++;
                 }
-
-                const posX = offsetX + x * spacing;
-                const posY = offsetY + y * spacing;
-                const posZ = offsetZ + z * spacing;
-                matrix.setPosition(posX, posY, posZ);
-
-                instancedMesh.setMatrixAt(instanceIndex, matrix);
-                instancedMesh.setColorAt(instanceIndex, instanceColor);
-
-                instanceIndex++;
             }
         }
     }
@@ -140,7 +148,7 @@ function createStructureFromData(scene, data, environmentMap) {
     }
 
     scene.add(instancedMesh);
-    console.log(`Created structure with ${instanceCount} tinted glass cubes.`);
+    console.log(`Created structure with ${instanceCount} non-null cubes.`);
     return instancedMesh;
 }
 
